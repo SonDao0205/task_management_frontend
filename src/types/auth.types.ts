@@ -13,7 +13,7 @@ export type LoginRequest = {
 };
 
 export type RegisterResponse = {
-  name: String;
+  name: string;
   email: string;
   phone: string;
 };
@@ -21,5 +21,9 @@ export type RegisterResponse = {
 export type LoginResponse = {
   user: User;
   access_token: string;
-  refresh_token: string;
+};
+
+export type ChangePasswordRequest = {
+  current_password: string;
+  new_password: string;
 };

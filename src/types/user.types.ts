@@ -10,7 +10,6 @@ export type User = {
   email: string;
   phone: string;
   status: UserStatus;
-  refresh_token: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at: string;
+  updated_at: string | null;
 };

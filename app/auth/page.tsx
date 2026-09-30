@@ -1,11 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import styles from "./auth.module.css";
 import { LoginRequest, RegisterRequest } from "@/src/types/auth.types";
 import { useStore } from "../MobxProvider";
-import { redirect } from "next/navigation";
-import { showToast } from "nextjs-toast-notify";
+import { useAuth } from "../AuthProvider";
 
 type LoginInput = {
   input: string;
@@ -45,9 +44,11 @@ type AuthView = "login" | "register";
 export default function AuthPage() {
   // stores
   const { authStore } = useStore();
+  const { login } = useAuth();
 
   // view state
   const [view, setView] = useState<AuthView>("login");
+  const [submitting, setSubmitting] = useState(false);
   const isLogin = view === "login";
 
   // input state
@@ -146,17 +147,16 @@ export default function AuthPage() {
       return;
     }
 
-    console.log("login form : ", loginForm);
-
     const loginRequest: LoginRequest = {
       input: loginForm.input,
       password: loginForm.password,
     };
 
-    const data = await authStore.login(loginRequest);
-
-    if (data?.success) {
-      showToast.success(data.message);
+    setSubmitting(true);
+    try {
+      await login(loginRequest);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -176,7 +176,6 @@ export default function AuthPage() {
 
     const data = await authStore.register(registerRequest);
     if (data?.success) {
-      showToast.success(data.message);
       setView("login");
     }
   };
@@ -267,8 +266,13 @@ export default function AuthPage() {
                   Quên mật khẩu?
                 </button>
               </div>
-              <button className={styles.submitButton} type="submit">
-                Đăng nhập <span aria-hidden="true">→</span>
+              <button
+                className={styles.submitButton}
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Đang đăng nhập..." : "Đăng nhập"}{" "}
+                <span aria-hidden="true">→</span>
               </button>
             </form>
 
