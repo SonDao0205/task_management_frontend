@@ -4,6 +4,7 @@ import "./globals.css";
 import MobxProvider from "./MobxProvider";
 import AuthProvider from "./AuthProvider";
 import ToastProvider from "./ToastProvider";
+import { ConfirmProvider } from "@/src/hooks/useConfirm";
 
 export const metadata: Metadata = {
   title: {
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ToastProvider />
 
         <MobxProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <ConfirmProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ConfirmProvider>
         </MobxProvider>
       </body>
     </html>

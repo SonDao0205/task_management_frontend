@@ -11,4 +11,18 @@ export const API = {
   USERS: {
     CHANGE_PASSWORD: "/users/me/password",
   },
+  WORKSPACES: {
+    LIST: "/workspaces",
+    DETAIL: (workspaceId: string) => `/workspaces/${workspaceId}`,
+    MEMBERS: (workspaceId: string) => `/workspaces/${workspaceId}/members`,
+    MEMBER: (workspaceId: string, memberId: string) =>
+      `/workspaces/${workspaceId}/members/${memberId}`,
+    TASKS: (workspaceId: string) => `/workspaces/${workspaceId}/tasks`,
+  },
+  TASKS: {
+    CREATE: "/tasks",
+    MY_TASKS: "/tasks/me",
+    DETAIL: (taskId: string) => `/tasks/${taskId}`,
+    ASSIGNEES: (taskId: string) => `/tasks/${taskId}/assignees`,
+  },
 };

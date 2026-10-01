@@ -1,32 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import styles from "@/app/page.module.css";
+import { useConfirm } from "@/src/hooks/useConfirm";
 import { useDashboard } from "../DashboardProvider";
 import type { Workspace } from "../types";
-import {
-  AvatarStack,
-  EmptyState,
-  Icon,
-  Modal,
-} from "../components/DashboardUi";
+import { Modal } from "../components/modal";
+import { EmptyState, Icon } from "../components/ui";
+import { AvatarStack } from "../components/workspace";
 
-type WorkspaceModal = "add" | "edit" | "delete" | null;
+type WorkspaceModal = "add" | "edit" | null;
 
 export default function HomePage() {
-  const { workspaces, createWorkspace, updateWorkspace, deleteWorkspace } =
-    useDashboard();
+  const confirm = useConfirm();
+  const {
+    workspaces,
+    loadingWorkspaces,
+    submitting,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
+  } = useDashboard();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [modal, setModal] = useState<WorkspaceModal>(null);
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null,
   );
 
-  const filteredWorkspaces = workspaces.filter((workspace) =>
-    workspace.name
-      .toLocaleLowerCase("vi")
-      .includes(search.toLocaleLowerCase("vi").trim()),
+  const filteredWorkspaces = useMemo(
+    () =>
+      workspaces.filter((workspace) =>
+        workspace.name
+          .toLocaleLowerCase("vi")
+          .includes(search.toLocaleLowerCase("vi").trim()),
+      ),
+    [search, workspaces],
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredWorkspaces.length / 5));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedWorkspaces = filteredWorkspaces.slice(
+    (currentPage - 1) * 5,
+    currentPage * 5,
   );
 
   function openModal(name: WorkspaceModal, workspace?: Workspace) {
@@ -34,21 +50,30 @@ export default function HomePage() {
     setModal(name);
   }
 
-  function submitWorkspace(event: FormEvent<HTMLFormElement>) {
+  async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = String(
       new FormData(event.currentTarget).get("name") ?? "",
     ).trim();
     if (!name) return;
-    if (modal === "edit" && selectedWorkspace)
-      updateWorkspace(selectedWorkspace.id, name);
-    else createWorkspace(name);
-    setModal(null);
+    const description = String(
+      new FormData(event.currentTarget).get("description") ?? "",
+    ).trim();
+    const success =
+      modal === "edit" && selectedWorkspace
+        ? await updateWorkspace(selectedWorkspace.id, name)
+        : await createWorkspace(name, description);
+    if (success) setModal(null);
   }
 
-  function confirmDelete() {
-    if (selectedWorkspace) deleteWorkspace(selectedWorkspace.id);
-    setModal(null);
+  async function confirmDelete(workspace: Workspace) {
+    const accepted = await confirm({
+      variant: "delete",
+      title: "Xóa workspace?",
+      message: `Toàn bộ task và thành viên trong “${workspace.name}” cũng sẽ bị xóa.`,
+      confirmText: "Xóa workspace",
+    });
+    if (accepted) await deleteWorkspace(workspace.id);
   }
 
   return (
@@ -71,7 +96,10 @@ export default function HomePage() {
           <Icon name="search" size={18} />
           <input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
             placeholder="Tìm kiếm tên workspace..."
           />
           <span className={styles.srOnly}>Tìm workspace</span>
@@ -93,7 +121,7 @@ export default function HomePage() {
             </tr>
           </thead>
           <tbody>
-            {filteredWorkspaces.map((workspace) => (
+            {paginatedWorkspaces.map((workspace) => (
               <tr key={workspace.id}>
                 <td>
                   <Link
@@ -107,6 +135,7 @@ export default function HomePage() {
                   <AvatarStack
                     members={workspace.members}
                     total={workspace.memberCount}
+                    limit={8}
                   />
                 </td>
                 <td>
@@ -135,7 +164,7 @@ export default function HomePage() {
                       <button
                         className={`${styles.iconButton} ${styles.dangerIcon}`}
                         title="Xóa workspace"
-                        onClick={() => openModal("delete", workspace)}
+                        onClick={() => void confirmDelete(workspace)}
                       >
                         <Icon name="trash" size={17} />
                       </button>
@@ -148,10 +177,34 @@ export default function HomePage() {
             ))}
           </tbody>
         </table>
-        {!filteredWorkspaces.length && (
+        {!loadingWorkspaces && !filteredWorkspaces.length && (
           <EmptyState message="Thử thay đổi từ khóa hoặc tạo workspace mới." />
         )}
       </div>
+      {loadingWorkspaces && <p>Đang tải workspace...</p>}
+      {filteredWorkspaces.length > 5 && (
+        <nav className={styles.pagination} aria-label="Phân trang workspace">
+          <button
+            className={`${styles.button} ${styles.cancelButton}`}
+            disabled={currentPage === 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            Trang trước
+          </button>
+          <span>
+            Trang {currentPage}/{totalPages}
+          </span>
+          <button
+            className={`${styles.button} ${styles.cancelButton}`}
+            disabled={currentPage === totalPages}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
+          >
+            Trang sau
+          </button>
+        </nav>
+      )}
 
       {modal === "add" && (
         <Modal
@@ -185,7 +238,10 @@ export default function HomePage() {
               >
                 Hủy
               </button>
-              <button className={`${styles.button} ${styles.primaryButton}`}>
+              <button
+                className={`${styles.button} ${styles.primaryButton}`}
+                disabled={submitting}
+              >
                 <Icon name="plus" size={17} /> Tạo workspace
               </button>
             </div>
@@ -216,38 +272,14 @@ export default function HomePage() {
               >
                 Hủy
               </button>
-              <button className={`${styles.button} ${styles.primaryButton}`}>
+              <button
+                className={`${styles.button} ${styles.primaryButton}`}
+                disabled={submitting}
+              >
                 Lưu thay đổi
               </button>
             </div>
           </form>
-        </Modal>
-      )}
-      {modal === "delete" && selectedWorkspace && (
-        <Modal
-          title="Xóa workspace?"
-          subtitle="Hành động này chỉ mô phỏng trên dữ liệu giao diện hiện tại."
-          danger
-          onClose={() => setModal(null)}
-        >
-          <div className={styles.confirmContent}>
-            Bạn có chắc muốn xóa <strong>{selectedWorkspace.name}</strong>?
-            Workspace sẽ biến mất khỏi danh sách cho đến khi tải lại trang.
-          </div>
-          <div className={styles.modalActions}>
-            <button
-              className={`${styles.button} ${styles.cancelButton}`}
-              onClick={() => setModal(null)}
-            >
-              Giữ lại
-            </button>
-            <button
-              className={`${styles.button} ${styles.dangerButton}`}
-              onClick={confirmDelete}
-            >
-              <Icon name="trash" size={17} /> Xóa workspace
-            </button>
-          </div>
         </Modal>
       )}
     </section>

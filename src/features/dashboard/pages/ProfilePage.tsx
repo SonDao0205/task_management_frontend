@@ -2,7 +2,8 @@
 
 import { FormEvent, useState } from "react";
 import styles from "@/app/page.module.css";
-import { Avatar, Icon, Modal } from "../components/DashboardUi";
+import { Modal } from "../components/modal";
+import { Avatar, Icon } from "../components/ui";
 import { useAuth } from "@/app/AuthProvider";
 import { UserStatus } from "@/src/types/user.types";
 import { useStore } from "@/app/MobxProvider";

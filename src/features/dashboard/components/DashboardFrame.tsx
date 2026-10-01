@@ -5,18 +5,37 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import styles from "@/app/page.module.css";
 import { useDashboard } from "../DashboardProvider";
-import { currentUser } from "../mock-data";
-import { Avatar, Icon } from "./DashboardUi";
+import { Avatar, Icon } from "./ui";
 import { useAuth } from "@/app/AuthProvider";
-import Swal from "sweetalert2";
+import { useConfirm } from "@/src/hooks/useConfirm";
 
 function DashboardHeader() {
   const { user, logOut } = useAuth();
+  const confirm = useConfirm();
   const pathname = usePathname();
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
+  const currentUser = {
+    initials:
+      user?.name
+        .split(" ")
+        .filter(Boolean)
+        .slice(-2)
+        .map((part) => part[0]?.toUpperCase())
+        .join("") || "U",
+    color: "blue",
+    name: user?.name ?? "Người dùng",
+  };
 
   const handleLogout = async () => {
+    const accepted = await confirm({
+      variant: "warning",
+      title: "Đăng xuất?",
+      message: "Bạn có chắc chắn muốn kết thúc phiên đăng nhập hiện tại?",
+      confirmText: "Đăng xuất",
+      cancelText: "Quay lại",
+    });
+    if (!accepted) return;
     await logOut();
   };
 
@@ -96,17 +115,7 @@ function DashboardHeader() {
                 className={`${styles.menuItem} ${styles.logout}`}
                 onClick={() => {
                   setAccountOpen(false);
-
-                  Swal.fire({
-                    title: "Bạn có chắc chắn muốn đăng xuất không?",
-                    showDenyButton: true,
-                    confirmButtonText: "Đăng xuất!",
-                    denyButtonText: `Quay lại!`,
-                  }).then((result) => {
-                    if (result.isConfirmed) {
-                      handleLogout();
-                    }
-                  });
+                  void handleLogout();
                 }}
               >
                 <Icon name="logout" size={18} /> Đăng xuất

@@ -1,31 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "@/app/page.module.css";
-import { initialMyTasks, statusKeys } from "../mock-data";
-import type { StatusKey, Task } from "../types";
-import {
-  EmptyState,
-  Icon,
-  StatusSection,
-  TaskDetailModal,
-} from "../components/DashboardUi";
+import { useDashboard } from "../DashboardProvider";
+import { statusKeys, type StatusKey, type Task } from "../types";
+import { StatusSection, TaskDetailModal } from "../components/task";
+import { EmptyState, Icon } from "../components/ui";
 
 export default function MyTasksPage() {
+  const {
+    workspace: taskWorkspace,
+    myTaskWorkspaces,
+    loadingMyTasks,
+    submitting,
+    loadWorkspace,
+    loadMyTasks,
+    updateTask,
+  } = useDashboard();
   const [search, setSearch] = useState("");
   const [sortMode, setSortMode] = useState("default");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [openWorkspaces, setOpenWorkspaces] = useState<Record<number, boolean>>(
-    { 1: true },
+  const [openWorkspaces, setOpenWorkspaces] = useState<Record<string, boolean>>(
+    {},
   );
   const [openStatuses, setOpenStatuses] = useState<Record<string, boolean>>({
-    "1-todo": true,
-    "2-review": true,
   });
+
+  useEffect(() => {
+    void loadMyTasks();
+  }, [loadMyTasks]);
 
   const filteredWorkspaces = useMemo(
     () =>
-      initialMyTasks.map((workspace) => {
+      myTaskWorkspaces.map((workspace) => {
         const filtered = workspace.tasks.filter((task) =>
           task.title
             .toLocaleLowerCase("vi")
@@ -39,12 +46,17 @@ export default function MyTasksPage() {
               );
         return { ...workspace, tasks };
       }),
-    [search, sortMode],
+    [myTaskWorkspaces, search, sortMode],
   );
 
-  function toggleStatus(workspaceId: number, status: StatusKey) {
+  function toggleStatus(workspaceId: string, status: StatusKey) {
     const key = `${workspaceId}-${status}`;
     setOpenStatuses((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function openTask(task: Task) {
+    setSelectedTask(task);
+    void loadWorkspace(task.workspaceId);
   }
 
   return (
@@ -59,7 +71,12 @@ export default function MyTasksPage() {
           </p>
         </div>
         <div className={styles.summaryPill}>
-          <span>6</span>
+          <span>
+            {myTaskWorkspaces.reduce(
+              (total, workspace) => total + workspace.tasks.length,
+              0,
+            )}
+          </span>
           <small>Tổng nhiệm vụ</small>
         </div>
       </div>
@@ -85,17 +102,22 @@ export default function MyTasksPage() {
           </select>
         </label>
       </div>
-      {filteredWorkspaces.map((workspace) => (
+      {loadingMyTasks && <p>Đang tải nhiệm vụ...</p>}
+      {filteredWorkspaces.map((workspace, workspaceIndex) => (
         <section
           key={workspace.id}
-          className={`${styles.card} ${styles.workspaceAccordion} ${openWorkspaces[workspace.id] ? styles.sectionOpen : ""}`}
+          className={`${styles.card} ${styles.workspaceAccordion} ${
+            (openWorkspaces[workspace.id] ?? workspaceIndex === 0)
+              ? styles.sectionOpen
+              : ""
+          }`}
         >
           <button
             className={styles.accordionHead}
             onClick={() =>
               setOpenWorkspaces((current) => ({
                 ...current,
-                [workspace.id]: !current[workspace.id],
+                [workspace.id]: !(current[workspace.id] ?? workspaceIndex === 0),
               }))
             }
           >
@@ -112,7 +134,7 @@ export default function MyTasksPage() {
               <Icon name="chevron" size={17} />
             </span>
           </button>
-          {openWorkspaces[workspace.id] && (
+          {(openWorkspaces[workspace.id] ?? workspaceIndex === 0) && (
             <div className={styles.workspaceAccordionBody}>
               {statusKeys.map((status) => {
                 const tasks = workspace.tasks.filter(
@@ -125,7 +147,7 @@ export default function MyTasksPage() {
                     tasks={tasks}
                     open={Boolean(openStatuses[`${workspace.id}-${status}`])}
                     onToggle={() => toggleStatus(workspace.id, status)}
-                    onOpenTask={setSelectedTask}
+                    onOpenTask={openTask}
                   />
                 ) : null;
               })}
@@ -136,9 +158,28 @@ export default function MyTasksPage() {
           )}
         </section>
       ))}
+      {!loadingMyTasks && !filteredWorkspaces.length && (
+        <div className={`${styles.card} ${styles.standaloneEmpty}`}>
+          <EmptyState message="Bạn chưa được giao nhiệm vụ nào." />
+        </div>
+      )}
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
+          members={
+            taskWorkspace?.id === selectedTask.workspaceId
+              ? taskWorkspace.members
+              : []
+          }
+          canManageAssignees={
+            taskWorkspace?.id === selectedTask.workspaceId &&
+            (taskWorkspace.role === "Owner" || taskWorkspace.role === "Master")
+          }
+          canUpdateStatus
+          submitting={submitting}
+          onUpdate={({ status, memberIds }) =>
+            updateTask(selectedTask, status, memberIds)
+          }
           onClose={() => setSelectedTask(null)}
         />
       )}

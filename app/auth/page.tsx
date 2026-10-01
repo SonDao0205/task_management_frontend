@@ -65,6 +65,20 @@ export default function AuthPage() {
     confirmPassword: "",
   });
 
+  const initForm = () => {
+    setRegisterForm({
+      name: "",
+      phone: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    });
+    setLoginForm({
+      input: "",
+      password: "",
+    });
+  };
+
   const [error, setError] = useState<InputError>(initError);
 
   // validate
@@ -112,7 +126,7 @@ export default function AuthPage() {
 
       if (!email) {
         nextError.emailRegister = "Email không được bỏ trống!";
-      } else if (!emailPattern.test(email)) {
+      } else if (!emailPattern.test(email) || !email.endsWith("@gmail.com")) {
         nextError.emailRegister = "Email không đúng định dạng!";
       }
 
@@ -156,6 +170,7 @@ export default function AuthPage() {
     try {
       await login(loginRequest);
     } finally {
+      initForm();
       setSubmitting(false);
     }
   };
@@ -176,6 +191,7 @@ export default function AuthPage() {
 
     const data = await authStore.register(registerRequest);
     if (data?.success) {
+      initForm();
       setView("login");
     }
   };
