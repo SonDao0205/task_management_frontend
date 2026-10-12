@@ -1,34 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { observer } from "mobx-react-lite";
 import styles from "@/app/page.module.css";
-import { useDashboard } from "../DashboardProvider";
+import { useStore } from "@/src/features/provider/MobxProvider";
 import { statusKeys, type StatusKey, type Task } from "../types";
 import { StatusSection, TaskDetailModal } from "../components/task";
 import { EmptyState, Icon } from "../components/ui";
 
-export default function MyTasksPage() {
-  const {
-    workspace: taskWorkspace,
-    myTaskWorkspaces,
-    loadingMyTasks,
-    submitting,
-    loadWorkspace,
-    loadMyTasks,
-    updateTask,
-  } = useDashboard();
-  const [search, setSearch] = useState("");
-  const [sortMode, setSortMode] = useState("default");
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [openWorkspaces, setOpenWorkspaces] = useState<Record<string, boolean>>(
-    {},
-  );
-  const [openStatuses, setOpenStatuses] = useState<Record<string, boolean>>({
-  });
+function MyTasksPage() {
+  const { workspaceStore, taskStore, feedbackStore, myTasksPageStore } =
+    useStore();
+  const { workspace: taskWorkspace } = workspaceStore;
+  const { myTaskWorkspaces, loadingMyTasks, submitting } = taskStore;
+  const { search, sortMode, selectedTask, openWorkspaces, openStatuses } =
+    myTasksPageStore;
 
   useEffect(() => {
-    void loadMyTasks();
-  }, [loadMyTasks]);
+    void taskStore.loadMyTasks();
+  }, [taskStore]);
 
   const filteredWorkspaces = useMemo(
     () =>
@@ -50,13 +40,15 @@ export default function MyTasksPage() {
   );
 
   function toggleStatus(workspaceId: string, status: StatusKey) {
-    const key = `${workspaceId}-${status}`;
-    setOpenStatuses((current) => ({ ...current, [key]: !current[key] }));
+    myTasksPageStore.toggleStatus(workspaceId, status);
   }
 
   function openTask(task: Task) {
-    setSelectedTask(task);
-    void loadWorkspace(task.workspaceId);
+    myTasksPageStore.selectTask(task);
+    void Promise.all([
+      workspaceStore.loadWorkspace(task.workspaceId),
+      taskStore.loadWorkspaceTasks(task.workspaceId),
+    ]);
   }
 
   return (
@@ -85,7 +77,7 @@ export default function MyTasksPage() {
           <Icon name="search" size={18} />
           <input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => myTasksPageStore.setSearch(event.target.value)}
             placeholder="Tìm kiếm nhiệm vụ..."
           />
           <span className={styles.srOnly}>Tìm nhiệm vụ của tôi</span>
@@ -94,7 +86,9 @@ export default function MyTasksPage() {
           <Icon name="calendar" size={17} />
           <select
             value={sortMode}
-            onChange={(event) => setSortMode(event.target.value)}
+            onChange={(event) =>
+              myTasksPageStore.setSortMode(event.target.value)
+            }
           >
             <option value="default">Sắp xếp theo thời gian</option>
             <option value="desc">Thời gian còn lại: nhiều → ít</option>
@@ -115,10 +109,10 @@ export default function MyTasksPage() {
           <button
             className={styles.accordionHead}
             onClick={() =>
-              setOpenWorkspaces((current) => ({
-                ...current,
-                [workspace.id]: !(current[workspace.id] ?? workspaceIndex === 0),
-              }))
+              myTasksPageStore.toggleWorkspace(
+                workspace.id,
+                workspaceIndex === 0,
+              )
             }
           >
             <span className={styles.accordionTitle}>
@@ -177,12 +171,20 @@ export default function MyTasksPage() {
           }
           canUpdateStatus
           submitting={submitting}
-          onUpdate={({ status, memberIds }) =>
-            updateTask(selectedTask, status, memberIds)
-          }
-          onClose={() => setSelectedTask(null)}
+          onUpdate={async ({ status, memberIds }) => {
+            const result = await taskStore.updateTask(
+              selectedTask,
+              status,
+              memberIds,
+            );
+            if (result.success) feedbackStore.notify(result.message);
+            return result.success;
+          }}
+          onClose={() => myTasksPageStore.selectTask(null)}
         />
       )}
     </section>
   );
 }
+
+export default observer(MyTasksPage);

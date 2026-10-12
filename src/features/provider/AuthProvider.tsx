@@ -16,6 +16,7 @@ import { toast } from "@/src/common/toast";
 import type { LoginRequest } from "@/src/types/auth.types";
 import type { User } from "@/src/types/user.types";
 import { LocalStorageService } from "@/src/utils/localStorage.service";
+import { useLoading } from "./LoadingProvider";
 
 type UserContextType = {
   user: User | null;
@@ -31,41 +32,55 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { authStore } = useStore();
+  const { setLoading: setGlobalLoading } = useLoading();
   const pathname = usePathname();
   const router = useRouter();
 
   const refreshUser = useCallback(async () => {
-    const response = await authStore.me();
-    setUser(response.data);
-  }, [authStore]);
+    setGlobalLoading("auth", true);
+    try {
+      const response = await authStore.me();
+      setUser(response.data);
+    } finally {
+      setGlobalLoading("auth", false);
+    }
+  }, [authStore, setGlobalLoading]);
 
   const login = useCallback(
     async (form: LoginRequest): Promise<boolean> => {
-      const response = await authStore.login(form);
-      if (!response) return false;
+      setGlobalLoading("auth", true);
+      try {
+        const response = await authStore.login(form);
+        if (!response) return false;
 
-      setUser(response.data.user);
-      router.replace("/");
-      router.refresh();
-      return true;
+        setUser(response.data.user);
+        router.replace("/");
+        router.refresh();
+        return true;
+      } finally {
+        setGlobalLoading("auth", false);
+      }
     },
-    [authStore, router],
+    [authStore, router, setGlobalLoading],
   );
 
   const logOut = useCallback(async () => {
+    setGlobalLoading("auth", true);
     try {
       await authStore.logOut();
     } finally {
       setUser(null);
       router.replace("/auth");
       router.refresh();
+      setGlobalLoading("auth", false);
     }
-  }, [authStore, router]);
+  }, [authStore, router, setGlobalLoading]);
 
   useEffect(() => {
     let active = true;
 
     async function bootstrapSession() {
+      setGlobalLoading("auth", true);
       try {
         if (!LocalStorageService.get<string>("accessToken")) {
           await authStore.refreshSession();
@@ -76,6 +91,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         LocalStorageService.remove("accessToken");
         if (active) setUser(null);
       } finally {
+        setGlobalLoading("auth", false);
         if (active) setLoading(false);
       }
     }
@@ -84,7 +100,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [authStore]);
+  }, [authStore, setGlobalLoading]);
 
   useEffect(() => {
     if (loading) return;
@@ -131,7 +147,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   );
   const canRender =
     !loading &&
-    ((pathname === "/auth" && !user) || (pathname !== "/auth" && Boolean(user)));
+    ((pathname === "/auth" && !user) ||
+      (pathname !== "/auth" && Boolean(user)));
 
   return (
     <UserContext.Provider value={value}>

@@ -1,3 +1,5 @@
+import { User } from "@/src/types/user.types";
+
 export type Priority = "high" | "medium" | "low";
 export type StatusKey = "todo" | "progress" | "review" | "done";
 export type Role = "Owner" | "Master" | "Member";
@@ -96,7 +98,11 @@ export type Task = {
   startAt: string;
   deadline: string;
   days: number;
-  assignees: (AvatarData & { memberId: string; userId: string; email: string })[];
+  assignees: (AvatarData & {
+    memberId: string;
+    userId: string;
+    email: string;
+  })[];
   memberIds: string[];
   workspaceId: string;
   workspaceName?: string;
@@ -130,4 +136,39 @@ export const priorityMeta: Record<Priority, string> = {
   high: "Cao",
   medium: "Trung bình",
   low: "Thấp",
+};
+
+export type CommentData = {
+  created_by: string;
+  workspace_id: string;
+  task_id: string;
+  parent_id: string | null;
+  content: string;
+};
+
+export type WorkspaceData = {
+  user_id: string;
+  workspace_id: string;
+};
+
+export type Comment = {
+  id: string;
+  workspace: Workspace;
+  created_by: User;
+  task: Task;
+  content: string;
+  parent: Comment;
+  created_at: Date;
+};
+
+export type CommentDto = {
+  id: string;
+  workspace_id: string;
+  created_by: string;
+  task_id: string;
+  content: string;
+  parent_id: string | null;
+  created_at: string;
+  name?: string;
+  userName: string;
 };

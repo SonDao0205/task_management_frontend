@@ -1,19 +1,19 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent } from "react";
+import { observer } from "mobx-react-lite";
 import styles from "@/app/page.module.css";
 import { Modal } from "../components/modal";
 import { Avatar, Icon } from "../components/ui";
-import { useAuth } from "@/app/AuthProvider";
+import { useAuth } from "@/src/features/provider/AuthProvider";
 import { UserStatus } from "@/src/types/user.types";
-import { useStore } from "@/app/MobxProvider";
+import { useStore } from "@/src/features/provider/MobxProvider";
 import { toast } from "@/src/common/toast";
 
-export default function ProfilePage() {
+function ProfilePage() {
   const { user } = useAuth();
-  const { authStore } = useStore();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
+  const { authStore, profilePageStore } = useStore();
+  const { changePasswordOpen, changingPassword } = profilePageStore;
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +28,7 @@ export default function ProfilePage() {
       return;
     }
 
-    setChangingPassword(true);
+    profilePageStore.setChangingPassword(true);
     try {
       const success = await authStore.changePassword({
         current_password: currentPassword,
@@ -36,10 +36,10 @@ export default function ProfilePage() {
       });
       if (success) {
         form.reset();
-        setChangePasswordOpen(false);
+        profilePageStore.setPasswordDialog(false);
       }
     } finally {
-      setChangingPassword(false);
+      profilePageStore.setChangingPassword(false);
     }
   }
 
@@ -85,7 +85,7 @@ export default function ProfilePage() {
           </span>
           <button
             className={`${styles.button} ${styles.primaryButton} ${styles.fullButton}`}
-            onClick={() => setChangePasswordOpen(true)}
+            onClick={() => profilePageStore.setPasswordDialog(true)}
           >
             <Icon name="lock" size={17} /> Đổi mật khẩu
           </button>
@@ -119,7 +119,7 @@ export default function ProfilePage() {
         <Modal
           title="Đổi mật khẩu"
           subtitle="Mật khẩu nên có ít nhất 8 ký tự."
-          onClose={() => setChangePasswordOpen(false)}
+          onClose={() => profilePageStore.setPasswordDialog(false)}
         >
           <form className={styles.modalForm} onSubmit={changePassword}>
             <label>
@@ -160,7 +160,7 @@ export default function ProfilePage() {
               <button
                 type="button"
                 className={`${styles.button} ${styles.cancelButton}`}
-                onClick={() => setChangePasswordOpen(false)}
+                onClick={() => profilePageStore.setPasswordDialog(false)}
               >
                 Hủy
               </button>
@@ -177,3 +177,5 @@ export default function ProfilePage() {
     </section>
   );
 }
+
+export default observer(ProfilePage);

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { observer } from "mobx-react-lite";
 import styles from "@/app/page.module.css";
-import { useDashboard } from "../DashboardProvider";
+import { useStore } from "@/src/features/provider/MobxProvider";
 import { Avatar, Icon } from "./ui";
-import { useAuth } from "@/app/AuthProvider";
+import { useAuth } from "@/src/features/provider/AuthProvider";
 import { useConfirm } from "@/src/hooks/useConfirm";
+import { ChatWidget } from "./chat/ChatWidget";
 
 function DashboardHeader() {
   const { user, logOut } = useAuth();
@@ -64,6 +66,7 @@ function DashboardHeader() {
         <span>Task Management</span>
       </Link>
       <nav className={styles.headerActions} aria-label="Điều hướng chính">
+        <ChatWidget />
         <Link
           className={`${styles.navButton} ${workspaceActive ? styles.navActive : ""}`}
           href="/"
@@ -128,8 +131,13 @@ function DashboardHeader() {
   );
 }
 
-export function DashboardFrame({ children }: { children: ReactNode }) {
-  const { toast } = useDashboard();
+export const DashboardFrame = observer(function DashboardFrame({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const { feedbackStore } = useStore();
+  const { toast } = feedbackStore;
   return (
     <div className={styles.appShell}>
       <DashboardHeader />
@@ -142,4 +150,4 @@ export function DashboardFrame({ children }: { children: ReactNode }) {
       )}
     </div>
   );
-}
+});

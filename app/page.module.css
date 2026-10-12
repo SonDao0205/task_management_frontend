@@ -666,7 +666,7 @@
 .taskRow {
   display: grid;
   width: 100%;
-  grid-template-columns: minmax(250px, 1.7fr) 130px 145px 145px 90px;
+  grid-template-columns: minmax(250px, 1.7fr) 130px 145px 145px 90px 56px;
   gap: 16px;
   align-items: center;
   padding: 14px 19px;
@@ -687,6 +687,39 @@
   display: grid;
   min-width: 0;
   gap: 4px;
+}
+.taskOpenButton {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.taskOpenButton:hover strong {
+  color: var(--primary);
+}
+.taskCommentButton {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid #e7ebf2 !important;
+  border-radius: 9px;
+  background: #fff;
+  color: #758198;
+  font-size: 10px;
+  cursor: pointer;
+}
+.taskCommentButton:hover {
+  border-color: #bfccfa !important;
+  background: #f4f6ff;
+  color: #466bea;
 }
 .taskMain strong {
   overflow: hidden;
@@ -1185,6 +1218,117 @@
   display: grid;
   gap: 7px;
 }
+.taskComments {
+  display: grid;
+  gap: 12px;
+  padding-top: 3px;
+}
+.taskCommentsHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #344054;
+  font-size: 13px;
+}
+.taskCommentsHeading span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #526fce;
+  font-size: 10px;
+}
+
+.taskCommentsHeading {
+  padding: 10px;
+}
+
+.commentList {
+  padding: 10px;
+  display: grid;
+  gap: 14px;
+}
+.taskComment {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.taskCommentReply {
+  margin-left: 36px;
+  padding-left: 12px;
+  border-left: 2px solid #e7ebf2;
+}
+.commentBody {
+  min-width: 0;
+  flex: 1;
+}
+.commentMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.commentMeta strong {
+  color: #344054;
+  font-size: 11px;
+}
+.commentMeta time {
+  color: #98a2b3;
+  font-size: 10px;
+}
+.commentBody p {
+  margin: 4px 0 3px;
+  color: #596579;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.appShell .commentReplyButton,
+.appShell .replyingTo button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5270d1;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.commentComposer {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e9edf3;
+  border-radius: 11px;
+  background: #fcfdff;
+}
+.commentComposer textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 8px 9px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #344054;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.commentComposer textarea::placeholder {
+  color: #a2aaba;
+}
+.replyingTo {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  color: #8490a3;
+  font-size: 10px;
+}
+.commentComposer button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 .taskMemberChecklist,
 .assigneeList {
   display: grid;
@@ -1358,7 +1502,7 @@
     max-width: none;
   }
   .taskRow {
-    grid-template-columns: minmax(220px, 1fr) 110px;
+    grid-template-columns: minmax(0, 1fr) 110px 56px;
   }
   .taskRow > *:nth-child(3),
   .taskRow > *:nth-child(4),
@@ -1443,7 +1587,7 @@
     padding: 0 0 0 8px;
   }
   .taskRow {
-    grid-template-columns: minmax(0, 1fr) 86px;
+    grid-template-columns: minmax(0, 1fr) 86px 44px;
     padding: 13px 14px;
   }
   .statusHeader,

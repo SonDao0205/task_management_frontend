@@ -11,12 +11,14 @@ export function StatusSection({
   open,
   onToggle,
   onOpenTask,
+  onOpenComments,
 }: {
   status: StatusKey;
   tasks: Task[];
   open: boolean;
   onToggle: () => void;
   onOpenTask: (task: Task) => void;
+  onOpenComments?: (task: Task) => void;
 }) {
   return (
     <section
@@ -40,7 +42,7 @@ export function StatusSection({
         <div className={styles.taskList}>
           {tasks.length ? (
             tasks.map((task) => (
-              <TaskRow task={task} key={task.id} onOpen={onOpenTask} />
+              <TaskRow task={task} key={task.id} onOpen={onOpenTask} onOpenComments={onOpenComments} />
             ))
           ) : (
             <p className={styles.miniEmpty}>

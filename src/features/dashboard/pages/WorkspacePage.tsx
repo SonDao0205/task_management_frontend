@@ -2,24 +2,28 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { observer } from "mobx-react-lite";
 import styles from "@/app/page.module.css";
-import { useAuth } from "@/app/AuthProvider";
+import { useAuth } from "@/src/features/provider/AuthProvider";
 import { useConfirm } from "@/src/hooks/useConfirm";
-import { useDashboard } from "../DashboardProvider";
 import {
   statusKeys,
+  WorkspaceData,
   type ApiRole,
   type Priority,
   type StatusKey,
-  type Task,
   type WorkspaceMember,
 } from "../types";
 import { Modal } from "../components/modal";
-import { StatusSection, TaskDetailModal } from "../components/task";
+import {
+  StatusSection,
+  TaskCommentsModal,
+  TaskDetailModal,
+} from "../components/task";
 import { Avatar, EmptyState, Icon } from "../components/ui";
 import { AvatarStack, MoreButton } from "../components/workspace";
-
-type WorkspaceModal = "add-task" | "add-member" | "members" | null;
+import { useStore } from "@/src/features/provider/MobxProvider";
+import { useSocket } from "../../provider/SocketProvider";
 
 function minimumDateTime() {
   const date = new Date(Date.now() + 5 * 60 * 1000);
@@ -27,38 +31,24 @@ function minimumDateTime() {
   return date.toISOString().slice(0, 16);
 }
 
-export default function WorkspacePage({
-  workspaceId,
-}: {
-  workspaceId: string;
-}) {
+function WorkspacePage({ workspaceId }: { workspaceId: string }) {
   const confirm = useConfirm();
   const { user } = useAuth();
-  const {
-    workspace,
-    tasks,
-    loadingWorkspace,
-    submitting,
-    loadWorkspace,
-    addTask,
-    addMember,
-    updateMember,
-    deleteMember,
-    updateTask,
-  } = useDashboard();
-  const [search, setSearch] = useState("");
-  const [modal, setModal] = useState<WorkspaceModal>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [openStatuses, setOpenStatuses] = useState<Record<StatusKey, boolean>>({
-    todo: true,
-    progress: false,
-    review: false,
-    done: false,
-  });
-
+  const { workspaceStore, taskStore, feedbackStore, workspacePageStore } =
+    useStore();
+  const { workspace, loadingWorkspace, submitting } = workspaceStore;
+  const { tasks } = taskStore;
+  const { search, modal, selectedTask, openStatuses } = workspacePageStore;
+  const [commentsTask, setCommentsTask] = useState<
+    (typeof tasks)[number] | null
+  >(null);
   useEffect(() => {
-    void loadWorkspace(workspaceId);
-  }, [loadWorkspace, workspaceId]);
+    workspacePageStore.forWorkspace(workspaceId);
+    void Promise.all([
+      workspaceStore.loadWorkspace(workspaceId),
+      taskStore.loadWorkspaceTasks(workspaceId),
+    ]);
+  }, [workspaceStore, taskStore, workspacePageStore, workspaceId]);
 
   const currentWorkspace = workspace?.id === workspaceId ? workspace : null;
   const canManageWorkspace = currentWorkspace?.role === "Owner";
@@ -74,11 +64,38 @@ export default function WorkspacePage({
     [search, tasks],
   );
 
+  // socket realtime
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+
+    const data: WorkspaceData = {
+      user_id: String(user.id),
+      workspace_id: workspaceId,
+    };
+
+    const join = () => socket.emit("join-workspace", data);
+
+    // Join ngay nếu socket đã connected
+    if (socket.connected) join();
+
+    // Join lại mỗi khi (re)connect
+    socket.on("connect", join);
+
+    return () => {
+      socket.off("connect", join);
+      socket.emit("leave-workspace", data); // nếu server có hỗ trợ
+    };
+  }, [socket, user?.id, workspaceId]);
+
+  // -----------------------
+
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const status = String(data.get("status")) as StatusKey;
-    const success = await addTask(workspaceId, {
+    const result = await taskStore.addTask(workspaceId, {
       title: String(data.get("title") ?? "").trim(),
       description: String(data.get("description") ?? "").trim(),
       priority: String(data.get("priority")) as Priority,
@@ -87,9 +104,10 @@ export default function WorkspacePage({
       endAt: String(data.get("endAt") ?? ""),
       memberIds: data.getAll("memberIds").map(String),
     });
-    if (success) {
-      setOpenStatuses((current) => ({ ...current, [status]: true }));
-      setModal(null);
+    if (result.success) {
+      feedbackStore.notify(result.message);
+      workspacePageStore.openStatus(status);
+      workspacePageStore.setModal(null);
     }
   }
 
@@ -98,7 +116,13 @@ export default function WorkspacePage({
     const data = new FormData(event.currentTarget);
     const email = String(data.get("email") ?? "").trim();
     const role = String(data.get("role")) as ApiRole;
-    if (email && (await addMember(workspaceId, email, role))) setModal(null);
+    if (email) {
+      const result = await workspaceStore.addMember(workspaceId, email, role);
+      if (result.success) {
+        feedbackStore.notify(result.message);
+        workspacePageStore.setModal(null);
+      }
+    }
   }
 
   async function submitMemberRole(
@@ -108,7 +132,13 @@ export default function WorkspacePage({
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const role = String(data.get("role")) as ApiRole;
-    await updateMember(workspaceId, member.id, role, member.status);
+    const result = await workspaceStore.updateMember(
+      workspaceId,
+      member.id,
+      role,
+      member.status,
+    );
+    if (result.success) feedbackStore.notify(result.message);
   }
 
   async function removeMember(member: WorkspaceMember) {
@@ -119,7 +149,8 @@ export default function WorkspacePage({
       confirmText: "Xóa thành viên",
     });
     if (!confirmed) return;
-    await deleteMember(workspaceId, member.id);
+    const result = await workspaceStore.deleteMember(workspaceId, member.id);
+    if (result.success) feedbackStore.notify(result.message);
   }
 
   if (loadingWorkspace && !currentWorkspace) {
@@ -161,7 +192,7 @@ export default function WorkspacePage({
           </div>
         </div>
         <div className={styles.workspaceRight}>
-          <MoreButton onClick={() => setModal("members")} />
+          <MoreButton onClick={() => workspacePageStore.setModal("members")} />
           <AvatarStack
             members={currentWorkspace.members}
             total={currentWorkspace.memberCount}
@@ -170,7 +201,7 @@ export default function WorkspacePage({
           {canManageWorkspace && (
             <button
               className={`${styles.button} ${styles.softButton}`}
-              onClick={() => setModal("add-member")}
+              onClick={() => workspacePageStore.setModal("add-member")}
             >
               <Icon name="addUser" size={17} /> Thêm thành viên
             </button>
@@ -183,7 +214,9 @@ export default function WorkspacePage({
           <Icon name="search" size={18} />
           <input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              workspacePageStore.setSearch(event.target.value)
+            }
             placeholder="Tìm kiếm task trong workspace..."
           />
           <span className={styles.srOnly}>Tìm nhiệm vụ</span>
@@ -191,7 +224,7 @@ export default function WorkspacePage({
         {canManageTasks && (
           <button
             className={`${styles.button} ${styles.primaryButton}`}
-            onClick={() => setModal("add-task")}
+            onClick={() => workspacePageStore.setModal("add-task")}
           >
             <Icon name="plus" size={17} /> Thêm task
           </button>
@@ -204,13 +237,9 @@ export default function WorkspacePage({
           status={status}
           tasks={filteredTasks.filter((task) => task.status === status)}
           open={openStatuses[status]}
-          onToggle={() =>
-            setOpenStatuses((current) => ({
-              ...current,
-              [status]: !current[status],
-            }))
-          }
-          onOpenTask={setSelectedTask}
+          onToggle={() => workspacePageStore.toggleStatus(status)}
+          onOpenTask={(task) => workspacePageStore.selectTask(task)}
+          onOpenComments={setCommentsTask}
         />
       ))}
 
@@ -218,7 +247,7 @@ export default function WorkspacePage({
         <Modal
           title="Thêm nhiệm vụ mới"
           subtitle={`Tạo task trong ${currentWorkspace.name}.`}
-          onClose={() => setModal(null)}
+          onClose={() => workspacePageStore.setModal(null)}
         >
           <form className={styles.modalForm} onSubmit={submitTask}>
             <label>
@@ -294,7 +323,7 @@ export default function WorkspacePage({
               <button
                 type="button"
                 className={`${styles.button} ${styles.cancelButton}`}
-                onClick={() => setModal(null)}
+                onClick={() => workspacePageStore.setModal(null)}
               >
                 Hủy
               </button>
@@ -313,7 +342,7 @@ export default function WorkspacePage({
         <Modal
           title="Thêm thành viên"
           subtitle="Thêm tài khoản đã đăng ký vào workspace qua email."
-          onClose={() => setModal(null)}
+          onClose={() => workspacePageStore.setModal(null)}
         >
           <form className={styles.modalForm} onSubmit={submitMember}>
             <label>
@@ -341,7 +370,7 @@ export default function WorkspacePage({
               <button
                 type="button"
                 className={`${styles.button} ${styles.cancelButton}`}
-                onClick={() => setModal(null)}
+                onClick={() => workspacePageStore.setModal(null)}
               >
                 Hủy
               </button>
@@ -360,7 +389,7 @@ export default function WorkspacePage({
         <Modal
           title="Thành viên workspace"
           subtitle={`${currentWorkspace.memberCount} thành viên trong ${currentWorkspace.name}.`}
-          onClose={() => setModal(null)}
+          onClose={() => workspacePageStore.setModal(null)}
         >
           <div className={styles.memberList}>
             {currentWorkspace.members.map((member) => {
@@ -434,11 +463,25 @@ export default function WorkspacePage({
           }
           submitting={submitting}
           onUpdate={({ status, memberIds }) =>
-            updateTask(selectedTask, status, memberIds)
+            taskStore
+              .updateTask(selectedTask, status, memberIds)
+              .then((result) => {
+                if (result.success) feedbackStore.notify(result.message);
+                return result.success;
+              })
           }
-          onClose={() => setSelectedTask(null)}
+          onClose={() => workspacePageStore.selectTask(null)}
+        />
+      )}
+      {commentsTask && (
+        <TaskCommentsModal
+          key={commentsTask.id}
+          task={commentsTask}
+          onClose={() => setCommentsTask(null)}
         />
       )}
     </section>
   );
 }
+
+export default observer(WorkspacePage);

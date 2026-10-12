@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo } from "react";
+import { observer } from "mobx-react-lite";
 import styles from "@/app/page.module.css";
 import { useConfirm } from "@/src/hooks/useConfirm";
-import { useDashboard } from "../DashboardProvider";
+import { useStore } from "@/src/features/provider/MobxProvider";
 import type { Workspace } from "../types";
 import { Modal } from "../components/modal";
 import { EmptyState, Icon } from "../components/ui";
@@ -12,22 +13,11 @@ import { AvatarStack } from "../components/workspace";
 
 type WorkspaceModal = "add" | "edit" | null;
 
-export default function HomePage() {
+function HomePage() {
   const confirm = useConfirm();
-  const {
-    workspaces,
-    loadingWorkspaces,
-    submitting,
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-  } = useDashboard();
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [modal, setModal] = useState<WorkspaceModal>(null);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
-    null,
-  );
+  const { workspaceStore, feedbackStore, homePageStore } = useStore();
+  const { search, page, modal, selectedWorkspace } = homePageStore;
+  const { workspaces, loadingWorkspaces, submitting } = workspaceStore;
 
   const filteredWorkspaces = useMemo(
     () =>
@@ -45,10 +35,16 @@ export default function HomePage() {
     currentPage * 5,
   );
 
-  function openModal(name: WorkspaceModal, workspace?: Workspace) {
-    setSelectedWorkspace(workspace ?? null);
-    setModal(name);
-  }
+  useEffect(() => {
+    const fetchData = async () => {
+      await workspaceStore.loadWorkspaces();
+    };
+
+    fetchData();
+  }, [workspaceStore]);
+
+  const openModal = (name: WorkspaceModal, workspace?: Workspace) =>
+    homePageStore.openModal(name, workspace);
 
   async function submitWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,9 +57,12 @@ export default function HomePage() {
     ).trim();
     const success =
       modal === "edit" && selectedWorkspace
-        ? await updateWorkspace(selectedWorkspace.id, name)
-        : await createWorkspace(name, description);
-    if (success) setModal(null);
+        ? await workspaceStore.updateWorkspace(selectedWorkspace.id, name)
+        : await workspaceStore.createWorkspace(name, description);
+    if (success.success) {
+      feedbackStore.notify(success.message);
+      homePageStore.openModal(null);
+    }
   }
 
   async function confirmDelete(workspace: Workspace) {
@@ -73,7 +72,10 @@ export default function HomePage() {
       message: `Toàn bộ task và thành viên trong “${workspace.name}” cũng sẽ bị xóa.`,
       confirmText: "Xóa workspace",
     });
-    if (accepted) await deleteWorkspace(workspace.id);
+    if (accepted) {
+      const result = await workspaceStore.deleteWorkspace(workspace.id);
+      if (result.success) feedbackStore.notify(result.message);
+    }
   }
 
   return (
@@ -97,8 +99,7 @@ export default function HomePage() {
           <input
             value={search}
             onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
+              homePageStore.setSearch(event.target.value);
             }}
             placeholder="Tìm kiếm tên workspace..."
           />
@@ -187,7 +188,7 @@ export default function HomePage() {
           <button
             className={`${styles.button} ${styles.cancelButton}`}
             disabled={currentPage === 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            onClick={() => homePageStore.setPage(Math.max(1, page - 1))}
           >
             Trang trước
           </button>
@@ -198,7 +199,7 @@ export default function HomePage() {
             className={`${styles.button} ${styles.cancelButton}`}
             disabled={currentPage === totalPages}
             onClick={() =>
-              setPage((current) => Math.min(totalPages, current + 1))
+              homePageStore.setPage(Math.min(totalPages, page + 1))
             }
           >
             Trang sau
@@ -210,7 +211,7 @@ export default function HomePage() {
         <Modal
           title="Tạo workspace mới"
           subtitle="Bắt đầu một không gian làm việc cho đội nhóm của bạn."
-          onClose={() => setModal(null)}
+          onClose={() => homePageStore.openModal(null)}
         >
           <form className={styles.modalForm} onSubmit={submitWorkspace}>
             <label>
@@ -234,7 +235,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className={`${styles.button} ${styles.cancelButton}`}
-                onClick={() => setModal(null)}
+                onClick={() => homePageStore.openModal(null)}
               >
                 Hủy
               </button>
@@ -252,7 +253,7 @@ export default function HomePage() {
         <Modal
           title="Chỉnh sửa workspace"
           subtitle="Cập nhật thông tin hiển thị của workspace."
-          onClose={() => setModal(null)}
+          onClose={() => homePageStore.openModal(null)}
         >
           <form className={styles.modalForm} onSubmit={submitWorkspace}>
             <label>
@@ -268,7 +269,7 @@ export default function HomePage() {
               <button
                 type="button"
                 className={`${styles.button} ${styles.cancelButton}`}
-                onClick={() => setModal(null)}
+                onClick={() => homePageStore.openModal(null)}
               >
                 Hủy
               </button>
@@ -285,3 +286,5 @@ export default function HomePage() {
     </section>
   );
 }
+
+export default observer(HomePage);

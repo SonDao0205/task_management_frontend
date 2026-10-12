@@ -3,8 +3,8 @@
 import { FormEvent, useState } from "react";
 import styles from "./auth.module.css";
 import { LoginRequest, RegisterRequest } from "@/src/types/auth.types";
-import { useStore } from "../MobxProvider";
-import { useAuth } from "../AuthProvider";
+import { useStore } from "../../src/features/provider/MobxProvider";
+import { useAuth } from "../../src/features/provider/AuthProvider";
 
 type LoginInput = {
   input: string;

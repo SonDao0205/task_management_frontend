@@ -25,4 +25,7 @@ export const API = {
     DETAIL: (taskId: string) => `/tasks/${taskId}`,
     ASSIGNEES: (taskId: string) => `/tasks/${taskId}/assignees`,
   },
+  COMMENTS: {
+    LIST: "/comments",
+  },
 };
