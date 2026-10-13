@@ -1,7 +1,12 @@
 import { API } from "../common/api";
 import { request } from "../common/request";
 import { apiStatus, priorityValue } from "../features/dashboard/mappers";
-import type { StatusKey, Task, TaskDraft, TaskDto } from "../features/dashboard/types";
+import type {
+  StatusKey,
+  Task,
+  TaskDraft,
+  TaskDto,
+} from "../features/dashboard/types";
 
 export class TaskService {
   listByWorkspace = async (workspaceId: string) =>
@@ -10,16 +15,19 @@ export class TaskService {
   myTasks = async () => (await request.get<TaskDto[]>(API.TASKS.MY_TASKS)).data;
 
   create = (workspaceId: string, draft: TaskDraft) =>
-    request.post<unknown, {
-      title: string;
-      description: string;
-      priority: number;
-      start_at: string;
-      end_at: string;
-      status: string;
-      workspace_id: string;
-      member_ids: string[];
-    }>(API.TASKS.CREATE, {
+    request.post<
+      unknown,
+      {
+        title: string;
+        description: string;
+        priority: number;
+        start_at: string;
+        end_at: string;
+        status: string;
+        workspace_id: string;
+        member_ids: string[];
+      }
+    >(API.TASKS.CREATE, {
       title: draft.title,
       description: draft.description,
       priority: priorityValue(draft.priority),
@@ -38,19 +46,26 @@ export class TaskService {
 
     if (toAssign?.length) {
       await request.post<unknown, { member_ids: string[] }>(
-        API.TASKS.ASSIGNEES(task.id), { member_ids: toAssign },
+        API.TASKS.ASSIGNEES(task.id),
+        { member_ids: toAssign },
       );
     }
     if (toUnassign.length) {
       await request.delete<unknown, { member_ids: string[] }>(
-        API.TASKS.ASSIGNEES(task.id), { member_ids: toUnassign },
+        API.TASKS.ASSIGNEES(task.id),
+        { member_ids: toUnassign },
       );
     }
     if (status !== task.status) {
       await request.patch<unknown, { status: string }>(
-        API.TASKS.DETAIL(task.id), { status: apiStatus(status) },
+        API.TASKS.DETAIL(task.id),
+        { status: apiStatus(status) },
       );
     }
+  };
+
+  delete = async (taskId: string) => {
+    await request.delete(API.TASKS.DELETE(taskId));
   };
 }
 

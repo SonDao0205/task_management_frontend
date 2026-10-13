@@ -11,16 +11,12 @@ export class CommentService {
   getComments = async (taskId: string, workspaceId: string) => {
     const comments = (
       await request.get<CommentResponse[]>(
-        `${API.COMMENTS.LIST}/${taskId}/${workspaceId}`,
+        API.COMMENTS.LIST(taskId, workspaceId),
       )
     ).data;
 
     return comments.map((comment): CommentDto => {
-      const userName = comment.userName?.trim() || comment.name?.trim();
-      if (!userName) {
-        throw new Error(`Không nhận được tên người bình luận (${comment.id}).`);
-      }
-      return { ...comment, userName };
+      return { ...comment, userName: String(comment.name?.trim()) };
     });
   };
 }

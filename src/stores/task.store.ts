@@ -34,7 +34,9 @@ export class TaskStore {
   loadWorkspaceTasks = async (workspaceId: string) => {
     this.tasks = [];
     try {
-      const tasks = (await this.service.listByWorkspace(workspaceId)).map(mapTask);
+      const tasks = (await this.service.listByWorkspace(workspaceId)).map(
+        mapTask,
+      );
       runInAction(() => {
         this.tasks = tasks;
       });
@@ -90,6 +92,25 @@ export class TaskStore {
         }
         await Promise.all(refreshes);
         return "Đã cập nhật task";
+      },
+      async () => {
+        if (this.workspaceStore.workspace?.id === task.workspaceId) {
+          await this.workspaceStore.loadWorkspace(task.workspaceId);
+          await this.loadWorkspaceTasks(task.workspaceId);
+        }
+      },
+    );
+
+  deleteTask = async (task: Task) =>
+    this.submit(
+      async () => {
+        await this.service.delete(task.id);
+        const refreshes = [this.loadMyTasks()];
+        if (this.workspaceStore.workspace?.id === task.workspaceId) {
+          refreshes.push(this.loadWorkspaceTasks(task.workspaceId));
+        }
+        await Promise.all(refreshes);
+        return "Đã xoá task";
       },
       async () => {
         if (this.workspaceStore.workspace?.id === task.workspaceId) {

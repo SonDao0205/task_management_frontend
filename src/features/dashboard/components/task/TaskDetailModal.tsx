@@ -26,6 +26,7 @@ export function TaskDetailModal({
   canUpdateStatus = false,
   submitting = false,
   onUpdate,
+  onDelete,
 }: {
   task: Task;
   onClose: () => void;
@@ -34,6 +35,7 @@ export function TaskDetailModal({
   canUpdateStatus?: boolean;
   submitting?: boolean;
   onUpdate?: (update: TaskUpdate) => Promise<boolean>;
+  onDelete?: () => Promise<void>;
 }) {
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>(
     task.memberIds,
@@ -49,6 +51,10 @@ export function TaskDetailModal({
       memberIds: canManageAssignees ? selectedMemberIds : undefined,
     });
     if (success) onClose();
+  }
+
+  async function submitDelete() {
+    await onDelete?.();
   }
 
   function toggleMember(memberId: string, checked: boolean) {
@@ -163,6 +169,16 @@ export function TaskDetailModal({
           >
             Hủy
           </button>
+          {canManageAssignees && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.dangerButton}`}
+              onClick={onDelete}
+            >
+              Xoá task
+            </button>
+          )}
+
           <button
             type="submit"
             className={`${styles.button} ${styles.primaryButton}`}

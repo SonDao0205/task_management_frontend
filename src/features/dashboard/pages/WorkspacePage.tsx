@@ -470,6 +470,21 @@ function WorkspacePage({ workspaceId }: { workspaceId: string }) {
                 return result.success;
               })
           }
+          onDelete={async () => {
+            const confirmed = await confirm({
+              variant: "delete",
+              title: "Xóa task",
+              message: "Bạn có chắc muốn xóa task này không?",
+              confirmText: "Xóa task",
+            });
+            if (!confirmed) return;
+
+            const result = await taskStore.deleteTask(selectedTask);
+            if (result.success) {
+              feedbackStore.notify(result.message);
+              workspacePageStore.selectTask(null);
+            }
+          }}
           onClose={() => workspacePageStore.selectTask(null)}
         />
       )}

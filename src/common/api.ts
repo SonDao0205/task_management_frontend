@@ -24,8 +24,10 @@ export const API = {
     MY_TASKS: "/tasks/me",
     DETAIL: (taskId: string) => `/tasks/${taskId}`,
     ASSIGNEES: (taskId: string) => `/tasks/${taskId}/assignees`,
+    DELETE: (taskId: String) => `/tasks/${taskId}`,
   },
   COMMENTS: {
-    LIST: "/comments",
+    LIST: (taskId: string, workspaceId: string) =>
+      `/comments/${taskId}/${workspaceId}`,
   },
 };
