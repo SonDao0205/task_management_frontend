@@ -12,6 +12,7 @@ import { io, Socket } from "socket.io-client";
 import { ErrorHandler } from "@/src/utils/errorHandler";
 import { useLoading } from "./LoadingProvider";
 import { usePathname, useRouter } from "next/navigation";
+import { LocalStorageService } from "@/src/utils/localStorage.service";
 
 export type SocketCommentData = {
   text: string;
@@ -42,7 +43,14 @@ export default function SocketProvider({ children }: { children: ReactNode }) {
 
     setLoading("socket", true);
     let settled = false;
-    const socket = io("http://localhost:8080", { autoConnect: false });
+    const socket = io("http://localhost:8080", {
+      autoConnect: false,
+      auth: (callback) => {
+        callback({
+          accessToken: LocalStorageService.get<string>("accessToken"),
+        });
+      },
+    });
     const finishInitialConnect = () => {
       if (settled) return;
       settled = true;

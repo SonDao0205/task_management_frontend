@@ -2,130 +2,60 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { chatService, type ChatMessageDto } from "@/src/services/chat.service";
+import { useAuth } from "@/src/features/provider/AuthProvider";
+import { useSocket } from "@/src/features/provider/SocketProvider";
+import { ErrorHandler } from "@/src/utils/errorHandler";
 import styles from "./ChatWidget.module.css";
 
 type Message = {
-  id: number;
+  id: string;
   text: string;
   time: string;
-  mine: boolean;
-  status?: "Đã gửi" | "Đã nhận" | "Đã xem";
-};
-type Group = {
-  id: number;
-  name: string;
-  initials: string;
-  color: string;
-  online: boolean;
-  preview: string;
-  unread: number;
-  messages: Message[];
+  senderId: string;
+  senderName: string;
 };
 
-const initialGroups: Group[] = [
-  {
-    id: 1,
-    name: "Nhóm thiết kế sản phẩm",
-    initials: "TK",
-    color: "violet",
-    online: true,
-    preview: "Mình đã cập nhật bản thiết kế nhé.",
-    unread: 2,
-    messages: [
-      {
-        id: 1,
-        text: "Chào mọi người, mình gửi bản thiết kế mới để cả nhóm xem nhé!",
-        time: "09:24",
-        mine: false,
-      },
-      {
-        id: 2,
-        text: "Mình vừa xem rồi, phần dashboard trông gọn hơn nhiều.",
-        time: "09:27",
-        mine: true,
-        status: "Đã xem",
-      },
-      {
-        id: 3,
-        text: "Mình đã cập nhật bản thiết kế nhé.",
-        time: "09:31",
-        mine: false,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Dự án Website mới",
-    initials: "WD",
-    color: "blue",
-    online: true,
-    preview: "Deadline phần landing page là thứ Sáu.",
-    unread: 1,
-    messages: [
-      {
-        id: 1,
-        text: "Mọi người ơi, deadline phần landing page là thứ Sáu nhé.",
-        time: "10:02",
-        mine: false,
-      },
-      {
-        id: 2,
-        text: "Đã rõ, mình sẽ hoàn thành trước hạn.",
-        time: "10:05",
-        mine: true,
-        status: "Đã nhận",
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: "Marketing Q4",
-    initials: "MQ",
-    color: "orange",
-    online: false,
-    preview: "Cảm ơn team, hẹn gặp ngày mai!",
-    unread: 0,
-    messages: [
-      {
-        id: 1,
-        text: "Mình đã tổng hợp xong nội dung chiến dịch.",
-        time: "Hôm qua",
-        mine: false,
-      },
-      {
-        id: 2,
-        text: "Cảm ơn team, hẹn gặp ngày mai!",
-        time: "Hôm qua",
-        mine: true,
-        status: "Đã xem",
-      },
-    ],
-  },
-  {
-    id: 4,
-    name: "Team phát triển",
-    initials: "PT",
-    color: "green",
-    online: false,
-    preview: "Đã merge pull request vào nhánh chính.",
-    unread: 0,
-    messages: [
-      {
-        id: 1,
-        text: "API phần đăng nhập đã sẵn sàng để tích hợp.",
-        time: "08:46",
-        mine: false,
-      },
-      {
-        id: 2,
-        text: "Đã merge pull request vào nhánh chính.",
-        time: "08:52",
-        mine: true,
-        status: "Đã gửi",
-      },
-    ],
-  },
-];
+type Group = {
+  id: string;
+  name: string;
+  initials: string;
+  color: "violet" | "blue" | "orange" | "green";
+  preview: string;
+  messages: Message[];
+  loadingMessages: boolean;
+};
+
+const colors: Group["color"][] = ["violet", "blue", "orange", "green"];
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(-2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "G";
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function mapMessage(message: ChatMessageDto): Message {
+  return {
+    id: message.id,
+    text: message.content,
+    time: formatTime(message.created_at),
+    senderId:
+      message.created_by_id ?? message.created_by_info?.id ?? message.created_by ?? "",
+    senderName: message.created_by_info?.name ?? "Thành viên",
+  };
+}
 
 function BubbleIcon() {
   return (
@@ -148,11 +78,52 @@ function BubbleIcon() {
 
 export function ChatWidget() {
   const listRef = useRef<HTMLDivElement>(null);
-  const [groups, setGroups] = useState(initialGroups);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [listOpen, setListOpen] = useState(false);
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const { user } = useAuth();
+  const { socket } = useSocket();
   const activeGroup = groups.find((group) => group.id === activeId);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!listOpen) return;
+    let active = true;
+    async function loadGroups() {
+      setLoadingGroups(true);
+      try {
+        const data = await chatService.listGroups();
+        if (!active) return;
+        setGroups((current) =>
+          data.map(({ group_chat: group, latest_message }, index) => {
+            const previous = current.find((item) => item.id === group.id);
+            return {
+              id: group.id,
+              name: group.name,
+              initials: getInitials(group.name),
+              color: colors[index % colors.length]!,
+              preview: latest_message?.content ?? "Chưa có tin nhắn",
+              messages: previous?.messages ?? [],
+              loadingMessages: previous?.loadingMessages ?? false,
+            };
+          }),
+        );
+      } catch (error) {
+        ErrorHandler.errorHandler(ErrorHandler.getErrorMessage(error));
+      } finally {
+        if (active) setLoadingGroups(false);
+      }
+    }
+    void loadGroups();
+    return () => {
+      active = false;
+    };
+  }, [listOpen]);
 
   useEffect(() => {
     function closeListOnOutsideClick(event: PointerEvent) {
@@ -164,43 +135,89 @@ export function ChatWidget() {
     return () => document.removeEventListener("pointerdown", closeListOnOutsideClick);
   }, []);
 
-  function selectGroup(group: Group) {
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeGroup?.messages.length]);
+
+  useEffect(() => {
+    if (!socket) return;
+    function receiveChatError(data: { message?: string }) {
+      ErrorHandler.errorHandler(data.message ?? "Không thể thực hiện thao tác chat!");
+    }
+    function receiveMessage(dto: ChatMessageDto) {
+      const message = mapMessage(dto);
+      const groupId = dto.group_chat_id ?? dto.group_id;
+      if (!groupId) return;
+      setGroups((items) =>
+        items.map((group) => {
+          if (group.id !== groupId) return group;
+          const exists = group.messages.some((item) => item.id === message.id);
+          return {
+            ...group,
+            preview: message.text,
+            messages:
+              group.id === activeId && !exists
+                ? [...group.messages, message]
+                : group.messages,
+          };
+        }),
+      );
+    }
+    socket.on("newMessage", receiveMessage);
+    socket.on("chat:error", receiveChatError);
+    return () => {
+      socket.off("newMessage", receiveMessage);
+      socket.off("chat:error", receiveChatError);
+    };
+  }, [activeId, socket]);
+
+  async function selectGroup(group: Group) {
     setActiveId(group.id);
     setListOpen(false);
+    socket?.emit("join-group", { group_chat_id: group.id });
+    if (group.messages.length > 0 || group.loadingMessages) return;
+
     setGroups((items) =>
       items.map((item) =>
-        item.id === group.id ? { ...item, unread: 0 } : item,
+        item.id === group.id ? { ...item, loadingMessages: true } : item,
       ),
     );
+    try {
+      const messages = await chatService.listMessages(group.id);
+      setGroups((items) =>
+        items.map((item) =>
+          item.id === group.id
+            ? {
+                ...item,
+                messages: messages.map(mapMessage).reverse(),
+                loadingMessages: false,
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setGroups((items) =>
+        items.map((item) =>
+          item.id === group.id ? { ...item, loadingMessages: false } : item,
+        ),
+      );
+      ErrorHandler.errorHandler(ErrorHandler.getErrorMessage(error));
+    }
   }
 
   function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const text = draft.trim();
-    if (!text || !activeId) return;
-    setGroups((items) =>
-      items.map((group) =>
-        group.id === activeId
-          ? {
-              ...group,
-              preview: text,
-              messages: [
-                ...group.messages,
-                {
-                  id: Date.now(),
-                  text,
-                  time: new Intl.DateTimeFormat("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }).format(new Date()),
-                  mine: true,
-                  status: "Đã gửi",
-                },
-              ],
-            }
-          : group,
-      ),
-    );
+    const content = draft.trim();
+    if (!content || !activeGroup || !user?.id) return;
+    if (!socket?.connected) {
+      ErrorHandler.errorHandler("Chưa kết nối được đến máy chủ chat!");
+      return;
+    }
+    socket.emit("newMessage", {
+      content,
+      created_by_id: user.id,
+      group_chat_id: activeGroup.id,
+    });
     setDraft("");
   }
 
@@ -215,13 +232,9 @@ export function ChatWidget() {
         >
           <BubbleIcon />
           <span className={styles.tooltip}>Tin nhắn</span>
-          <i className={styles.notificationDot} />
         </button>
         {listOpen && (
-          <section
-            className={styles.groupPanel}
-            aria-label="Danh sách nhóm chat"
-          >
+          <section className={styles.groupPanel} aria-label="Danh sách nhóm chat">
             <div className={styles.listHeader}>
               <div>
                 <h2>Tin nhắn</h2>
@@ -230,112 +243,72 @@ export function ChatWidget() {
               <span className={styles.groupCount}>{groups.length} nhóm</span>
             </div>
             <div className={styles.groupList}>
+              {loadingGroups && <p className={styles.listMessage}>Đang tải nhóm chat...</p>}
+              {!loadingGroups && groups.length === 0 && (
+                <p className={styles.listMessage}>Bạn chưa có nhóm chat nào.</p>
+              )}
               {groups.map((group) => (
                 <button
                   key={group.id}
                   className={`${styles.groupItem} ${activeId === group.id ? styles.groupSelected : ""}`}
-                  onClick={() => selectGroup(group)}
+                  onClick={() => void selectGroup(group)}
                 >
                   <span className={`${styles.avatar} ${styles[group.color]}`}>
                     {group.initials}
-                    <i
-                      className={`${styles.presence} ${group.online ? styles.online : styles.offline}`}
-                    />
                   </span>
                   <span className={styles.groupCopy}>
                     <span className={styles.groupName}>{group.name}</span>
                     <span className={styles.groupPreview}>{group.preview}</span>
                   </span>
-                  <span className={styles.groupMeta}>
-                    {group.unread > 0 && (
-                      <i className={styles.unread}>{group.unread}</i>
-                    )}
-                  </span>
                 </button>
               ))}
             </div>
-            <div className={styles.listFooter}>
-              Chọn một nhóm để bắt đầu trò chuyện
-            </div>
+            <div className={styles.listFooter}>Chọn một nhóm để bắt đầu trò chuyện</div>
           </section>
         )}
       </div>
-      {activeGroup && createPortal((
-        <section
-          className={styles.chatWindow}
-          aria-label={`Trò chuyện: ${activeGroup.name}`}
-        >
+      {mounted && activeGroup && createPortal(
+        <section className={styles.chatWindow} aria-label={`Trò chuyện: ${activeGroup.name}`}>
           <header className={styles.chatHeader}>
             <span className={`${styles.avatar} ${styles[activeGroup.color]}`}>
               {activeGroup.initials}
-              <i
-                className={`${styles.presence} ${activeGroup.online ? styles.online : styles.offline}`}
-              />
             </span>
             <span className={styles.chatHeading}>
               <strong>{activeGroup.name}</strong>
-              <span
-                className={`${styles.statusText} ${activeGroup.online ? styles.statusOnline : styles.statusOffline}`}
-              >
-                <i />
-                {activeGroup.online ? "Đang hoạt động" : "Ngoại tuyến"}
-              </span>
+              <span className={styles.statusText}>{activeGroup.messages.length} tin nhắn</span>
             </span>
             <button
               className={styles.closeButton}
               onClick={() => setActiveId(null)}
               aria-label="Tắt khung chat"
             >
-              <svg
-                viewBox="0 0 24 24"
-                width="19"
-                height="19"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              >
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                 <path d="m18 6-12 12M6 6l12 12" />
               </svg>
             </button>
           </header>
           <div className={styles.messages}>
-            <div className={styles.dayDivider}>
-              <span>Hôm nay</span>
-            </div>
-            {activeGroup.messages.map((message) => (
-              <div
-                className={`${styles.messageRow} ${message.mine ? styles.messageMine : ""}`}
-                key={message.id}
-              >
-                {!message.mine && (
-                  <span
-                    className={`${styles.miniAvatar} ${styles[activeGroup.color]}`}
-                  >
-                    {activeGroup.initials}
-                  </span>
-                )}
-                <div className={styles.messageContent}>
-                  <div className={styles.bubble}>{message.text}</div>
-                  <div className={styles.messageMeta}>
-                    {message.time}
-                    {message.mine && (
-                      <>
-                        <span className={styles.metaSeparator}>·</span>
-                        <span
-                          className={
-                            message.status === "Đã xem" ? styles.seen : ""
-                          }
-                        >
-                          {message.status === "Đã xem" ? "✓✓" : "✓"}{" "}
-                          {message.status}
-                        </span>
-                      </>
-                    )}
+            {activeGroup.loadingMessages && <p className={styles.listMessage}>Đang tải tin nhắn...</p>}
+            {!activeGroup.loadingMessages && activeGroup.messages.length === 0 && (
+              <p className={styles.listMessage}>Chưa có tin nhắn trong nhóm này.</p>
+            )}
+            {activeGroup.messages.map((message) => {
+              const mine = message.senderId === user?.id;
+              return (
+                <div
+                  className={`${styles.messageRow} ${mine ? styles.messageMine : ""}`}
+                  key={message.id}
+                >
+                  {!mine && <span className={`${styles.miniAvatar} ${styles[activeGroup.color]}`}>{getInitials(message.senderName)}</span>}
+                  <div className={styles.messageContent}>
+                    {!mine && <span className={styles.senderName}>{message.senderName}</span>}
+                    <div className={styles.bubble}>{message.text}</div>
+                    <div className={styles.messageMeta}>{message.time}</div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+            <div ref={messagesEndRef} />
           </div>
           <form className={styles.composer} onSubmit={sendMessage}>
             <input
@@ -344,29 +317,16 @@ export function ChatWidget() {
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
             />
-            <button
-              type="submit"
-              aria-label="Gửi tin nhắn"
-              disabled={!draft.trim()}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="19"
-                height="19"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
+            <button type="submit" aria-label="Gửi tin nhắn" disabled={!draft.trim()}>
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="m22 2-7 20-4-9-9-4Z" />
                 <path d="M22 2 11 13" />
               </svg>
             </button>
           </form>
-        </section>
-      ), document.body)}
+        </section>,
+        document.body,
+      )}
     </>
   );
 }

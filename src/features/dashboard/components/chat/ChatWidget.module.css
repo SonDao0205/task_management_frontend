@@ -101,6 +101,13 @@
   overflow: auto;
   padding: 8px;
 }
+.listMessage {
+  margin: auto;
+  padding: 18px;
+  color: #8791a3;
+  font-size: 12px;
+  text-align: center;
+}
 .groupItem {
   display: flex;
   width: 100%;
@@ -145,21 +152,6 @@
   background: #e2f6ed;
   color: #318c66;
 }
-.presence {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 11px;
-  height: 11px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-}
-.online {
-  background: #25b777;
-}
-.offline {
-  background: #ef5964;
-}
 .groupCopy {
   display: flex;
   min-width: 0;
@@ -181,23 +173,6 @@
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.groupMeta {
-  display: flex;
-  align-items: center;
-}
-.unread {
-  display: grid;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  place-items: center;
-  border-radius: 12px;
-  background: #4169e1;
-  color: #fff;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 700;
 }
 .listFooter {
   padding: 12px;
@@ -268,18 +243,6 @@
   gap: 5px;
   font-size: 10px;
 }
-.statusText i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.statusOnline {
-  color: #20a872;
-}
-.statusOffline {
-  color: #e65360;
-}
 .closeButton {
   display: grid;
   width: 34px;
@@ -344,6 +307,11 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+.senderName {
+  padding: 0 3px;
+  color: #78849a;
+  font-size: 10px;
 }
 .bubble {
   padding: 10px 12px;

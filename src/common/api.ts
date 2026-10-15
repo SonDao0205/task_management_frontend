@@ -30,4 +30,8 @@ export const API = {
     LIST: (taskId: string, workspaceId: string) =>
       `/comments/${taskId}/${workspaceId}`,
   },
+  GROUPS: {
+    LIST: (limit: number, offset: number) => `/groups/${limit}/${offset}`,
+    MESSAGES: "/groups/messages",
+  },
 };
