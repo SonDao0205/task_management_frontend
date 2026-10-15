@@ -43,14 +43,17 @@ export default function SocketProvider({ children }: { children: ReactNode }) {
 
     setLoading("socket", true);
     let settled = false;
-    const socket = io("http://localhost:8080", {
-      autoConnect: false,
-      auth: (callback) => {
-        callback({
-          accessToken: LocalStorageService.get<string>("accessToken"),
-        });
+    const socket = io(
+      process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:8080",
+      {
+        autoConnect: false,
+        auth: (callback) => {
+          callback({
+            accessToken: LocalStorageService.get<string>("accessToken"),
+          });
+        },
       },
-    });
+    );
     const finishInitialConnect = () => {
       if (settled) return;
       settled = true;
